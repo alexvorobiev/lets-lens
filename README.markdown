@@ -23,6 +23,37 @@ of `error "todo: <function-name>"`.
 
 ----
 
+### Running the tests (from NICTA course)
+
+Some exercises include examples and properties, which appear in a comment above
+the code for that exercise. Examples begin with `>>>` while properties begin
+with `prop>`.
+
+The solution to the exercise must satisfy these tests. You can check if you have
+satisfied all tests with cabal-install and doctest. From the base directory of
+this source code:
+
+    > cabal update
+    > cabal install cabal-install
+    > cabal install --only-dependencies
+    > cabal configure --enable-tests
+    > cabal build
+    > cabal test
+
+Alternatively, you may run the tests in a single source file by using `doctest`
+explicitly. From the base directory of this source code:
+
+    > doctest -isrc -Wall -fno-warn-type-defaults <filename.hs>
+
+Using stack:
+
+    > stack exec doctest -- -isrc -Wall -fno-warn-type-defaults <filename.hs>
+    
+Note: There is a [bug in GHC 7.4.1](http://ghc.haskell.org/trac/ghc/ticket/5820)
+where for some configurations, running the tests will cause an unjustified
+compiler error.
+
+
 ### Exercise modules
 
 ##### `Lets.GetSetLens`
