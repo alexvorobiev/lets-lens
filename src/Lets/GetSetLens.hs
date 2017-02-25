@@ -40,7 +40,7 @@ module Lets.GetSetLens (
 import Control.Applicative(Applicative((<*>)))
 import Data.Char(toUpper)
 import Data.Map(Map)
-import qualified Data.Map as Map(insert, delete, lookup, alter)
+import qualified Data.Map as Map(lookup, alter)
 import Data.Set(Set)
 import qualified Data.Set as Set(insert, delete, member)
 import Lets.Data(Person(Person), Locality(Locality), Address(Address), bool)
@@ -194,7 +194,7 @@ fmodify ::
   -> a
   -> f a
 fmodify l g x =
-  fmap (set l x) (g $ get l x)
+  set l x <$> (g $ get l x)
   
 -- |
 --
@@ -210,7 +210,7 @@ fmodify l g x =
   -> a
   -> f a
 (|=) l fb x =
-  fmap (set l x) fb
+  set l x <$> fb
 
 infixl 5 |=
 
@@ -299,7 +299,7 @@ setL ::
   -> Lens (Set k) Bool
 setL n =
   Lens
-    (\s flag -> (if flag then Set.insert else Set.delete) n s)
+    (flip $ bool (Set.delete n) (Set.insert n))
     (Set.member n)
 
 -- |
@@ -318,9 +318,8 @@ compose ::
   Lens b c
   -> Lens a b
   -> Lens a c
-compose lbc lab = --undefined
+compose lbc lab = 
   Lens
-    -- (\a c -> set lab a $ set lbc (get lab a) c )
     (\a -> set lab a . set lbc (get lab a) )
     (get lbc . get lab)
 
@@ -390,9 +389,11 @@ choice ::
   -> Lens (Either a b) x
 choice lax lbx =
   Lens
-    (\eab x -> either
-      (\a -> Left $ set lax a x)
-      (\b -> Right $ set lbx b x) eab)
+    (\eab x ->
+       (either
+        (\v -> Left $ lax .~ x $ v)
+        (\v -> Right $ lbx .~ x $ v)
+        eab))                      
     (either (get lax) (get lbx))
 
 -- | An alias for @choice@.
