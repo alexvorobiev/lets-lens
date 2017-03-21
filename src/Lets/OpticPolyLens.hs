@@ -44,9 +44,10 @@ module Lets.OpticPolyLens (
 
 import Data.Char(toUpper)
 import Data.Map(Map)
-import qualified Data.Map as Map(insert, delete, lookup)
+import qualified Data.Map as Map(insert, delete, lookup, alter)
 import Data.Set(Set)
 import qualified Data.Set as Set(insert, delete, member)
+import Data.Bifunctor(bimap)
 import Lets.Data(AlongsideLeft(AlongsideLeft, getAlongsideLeft), AlongsideRight(AlongsideRight, getAlongsideRight), Identity(Identity, getIdentity), Const(Const, getConst), IntAnd(IntAnd), Person(Person), Locality(Locality), Address(Address), bool)
 import Prelude hiding (product)
 
@@ -123,8 +124,8 @@ modify ::
   -> (a -> b)
   -> s
   -> t
-modify =
-  error "todo: modify"
+modify lstab ab s =
+  set lstab s $ ab $ get lstab s
 
 -- | An alias for @modify@.
 (%~) ::
@@ -153,8 +154,8 @@ infixr 4 %~
   -> b
   -> s
   -> t
-(.~) =
-  error "todo: (.~)"
+(.~) lstab =
+  flip $ set lstab
 
 infixl 5 .~
 
@@ -174,8 +175,8 @@ fmodify ::
   -> (a -> f b)
   -> s
   -> f t 
-fmodify =
-  error "todo: fmodify"
+fmodify lstab afb s =
+  set lstab s <$> afb (get lstab s) 
 
 -- |
 --
@@ -190,8 +191,8 @@ fmodify =
   -> f b
   -> s
   -> f t
-(|=) =
-  error "todo: (|=)"
+(|=) lstab fb =
+  fmodify lstab (const fb)
 
 infixl 5 |=
 
@@ -208,7 +209,7 @@ infixl 5 |=
 fstL ::
   Lens (a, x) (b, x) a b
 fstL =
-  error "todo: fstL"
+  Lens $ \afb (a, x) -> fmap (\b' -> (b', x)) (afb a)  
 
 -- |
 --
@@ -223,8 +224,8 @@ fstL =
 sndL ::
   Lens (x, a) (x, b) a b
 sndL =
-  error "todo: sndL"
-
+  Lens $ \afb (x, a) -> fmap (\b' -> (x, b')) (afb a)  
+  
 -- |
 --
 -- >>> get (mapL 3) (Map.fromList (map (\c -> (ord c - 96, c)) ['a'..'d']))
@@ -248,8 +249,9 @@ mapL ::
   Ord k =>
   k
   -> Lens (Map k v) (Map k v) (Maybe v) (Maybe v)
-mapL =
-  error "todo: mapL"
+mapL k =
+  Lens $ \mvfmv mkv -> (\mv -> Map.alter (const mv) k mkv) <$>
+                         (mvfmv $ Map.lookup k mkv)
 
 -- |
 --
@@ -274,10 +276,14 @@ setL ::
   Ord k =>
   k
   -> Lens (Set k) (Set k) Bool Bool
-setL =
-  error "todo: setL"
+setL k =
+  Lens $ \bfb sk -> (bool (Set.delete k sk) (Set.insert k sk)) <$>
+                      (bfb $ Set.member k sk)
 
 -- |
+-- (a -> f b) -> s -> f t
+-- (s -> f t) -> q -> f r
+-- (a -> f b) -> q -> f r
 --
 -- >>> get (compose fstL sndL) ("abc", (7, "def"))
 -- 7
@@ -288,8 +294,8 @@ compose ::
   Lens s t a b
   -> Lens q r s t
   -> Lens q r a b
-compose =
-  error "todo: compose"
+compose (Lens stab) (Lens qrst) =
+  Lens $ qrst . stab
 
 -- | An alias for @compose@.
 (|.) ::
@@ -311,9 +317,12 @@ infixr 9 |.
 identity ::
   Lens a b a b
 identity =
-  error "todo: identity"
+  Lens $ id
 
 -- |
+-- (a -> f b) -> s -> f t
+-- (c -> f d) -> q -> f r
+-- ((a, c) -> f (b, d)) -> (s, q) -> f (t, r)
 --
 -- >>> get (product fstL sndL) (("abc", 3), (4, "def"))
 -- ("abc","def")
@@ -324,8 +333,10 @@ product ::
   Lens s t a b
   -> Lens q r c d
   -> Lens (s, q) (t, r) (a, c) (b, d)
-product =
-  error "todo: product"
+product lstab lqrcd =
+  -- Lens $ \acfbd (s, q) -> (\x -> (set lstab s $ fst x, set lqrcd q $ snd x)) <$>
+    Lens $ \acfbd (s, q) -> (bimap (set lstab s) (set lqrcd q)) <$>
+                            acfbd (get lstab s, get lqrcd q)
 
 -- | An alias for @product@.
 (***) ::
@@ -354,8 +365,9 @@ choice ::
   Lens s t a b
   -> Lens q r a b
   -> Lens (Either s q) (Either t r) a b
-choice =
-  error "todo: choice"
+choice lstab lqrab =
+  Lens $ \afb esq ->  (\x -> bimap (lstab .~ x) (lqrab .~ x) esq) <$>
+                        afb (either (get lstab) (get lqrab) esq) 
 
 -- | An alias for @choice@.
 (|||) ::
@@ -450,7 +462,7 @@ getSuburb ::
   Person
   -> String
 getSuburb =
-  error "todo: getSuburb"
+  get $ suburbL |. addressL
 
 
 -- |
@@ -465,7 +477,7 @@ setStreet ::
   -> String
   -> Person
 setStreet =
-  error "todo: setStreet"
+  set $ streetL |. addressL
 
 -- |
 --
@@ -478,7 +490,7 @@ getAgeAndCountry ::
   (Person, Locality)
   -> (Int, String)
 getAgeAndCountry =
-  error "todo: getAgeAndCountry"
+  get $ ageL *** countryL
 
 -- |
 --
@@ -490,7 +502,7 @@ getAgeAndCountry =
 setCityAndLocality ::
   (Person, Address) -> (String, Locality) -> (Person, Address)
 setCityAndLocality =
-  error "todo: setCityAndLocality"
+  set $ (cityL |. localityL |. addressL) *** (localityL)
   
 -- |
 --
